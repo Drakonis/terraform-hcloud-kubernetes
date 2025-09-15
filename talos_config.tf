@@ -215,9 +215,6 @@ locals {
       )
       registries           = var.talos_registries
       systemDiskEncryption = local.talos_system_disk_encryption
-      features = {
-        hostDNS = local.talos_host_dns
-      }
       time = {
         servers = var.talos_time_servers
       }
@@ -241,12 +238,8 @@ locals {
 
   # Control Plane Config
   control_plane_talos_config_patch = {
-    for node in hcloud_server.control_plane : node.name => {
+    for node in hcloud_server.control_plane : node.name => merge( local.talos_init_config, {
       machine = {
-        install = {
-          image           = local.talos_installer_image_url
-          extraKernelArgs = var.talos_extra_kernel_args
-        }
         nodeLabels = merge(
           local.talos_allow_scheduling_on_control_planes ? { "node.kubernetes.io/exclude-from-external-load-balancers" = { "$patch" = "delete" } } : {},
           local.control_plane_nodepools_map[node.labels.nodepool].labels
@@ -255,7 +248,6 @@ locals {
         nodeTaints = {
           for taint in local.control_plane_nodepools_map[node.labels.nodepool].taints : taint.key => "${taint.value}:${taint.effect}"
         }
-        certSANs = local.certificate_san
         network = {
           hostname = node.name
           interfaces = concat(
@@ -285,17 +277,8 @@ locals {
               } : null
             }]
           )
-          nameservers      = local.talos_nameservers
-          extraHostEntries = local.talos_extra_host_entries
         }
         kubelet = {
-          extraArgs = merge(
-            {
-              "cloud-provider"             = "external"
-              "rotate-server-certificates" = true
-            },
-            var.kubernetes_kubelet_extra_args
-          )
           extraConfig = merge(
             {
               shutdownGracePeriod             = "90s"
@@ -314,25 +297,7 @@ locals {
             },
             var.kubernetes_kubelet_extra_config
           )
-          extraMounts = local.talos_kubelet_extra_mounts
-          nodeIP = {
-            validSubnets = [local.network_node_ipv4_cidr]
-          }
         }
-        kernel = {
-          modules = var.talos_kernel_modules
-        }
-        sysctls = merge(
-          {
-            "net.core.somaxconn"                 = "65535",
-            "net.core.netdev_max_backlog"        = "4096",
-            "net.ipv6.conf.default.disable_ipv6" = "${var.talos_ipv6_enabled ? 0 : 1}",
-            "net.ipv6.conf.all.disable_ipv6"     = "${var.talos_ipv6_enabled ? 0 : 1}"
-          },
-          var.talos_sysctls_extra_args
-        )
-        registries           = var.talos_registries
-        systemDiskEncryption = local.talos_system_disk_encryption
         features = {
           kubernetesTalosAPIAccess = {
             enabled = true,
@@ -342,28 +307,12 @@ locals {
             ],
             allowedKubernetesNamespaces = ["kube-system"]
           },
-          hostDNS = local.talos_host_dns
-        }
-        time = {
-          servers = var.talos_time_servers
-        }
-        logging = {
-          destinations = var.talos_logging_destinations
         }
       }
       cluster = {
         allowSchedulingOnControlPlanes = local.talos_allow_scheduling_on_control_planes
-        network = {
-          dnsDomain      = var.cluster_domain
-          podSubnets     = [local.network_pod_ipv4_cidr]
-          serviceSubnets = [local.network_service_ipv4_cidr]
-          cni            = { name = "none" }
-        }
         coreDNS = {
           disabled = !var.talos_coredns_enabled
-        }
-        proxy = {
-          disabled = true
         }
         apiServer = {
           admissionControl = var.kube_api_admission_control
@@ -380,7 +329,6 @@ locals {
             "bind-address"   = "0.0.0.0"
           }
         }
-        discovery = local.talos_discovery
         etcd = {
           advertisedSubnets = [hcloud_network_subnet.control_plane.ip_range]
           extraArgs = {
@@ -401,20 +349,15 @@ locals {
           manifests = local.talos_manifests
         }
       }
-    }
+    })
   }
 
   # Worker Config
   worker_talos_config_patch = {
-    for node in hcloud_server.worker : node.name => {
+    for node in hcloud_server.worker : node.name => merge( local.talos_init_config, {
       machine = {
-        install = {
-          image           = local.talos_installer_image_url
-          extraKernelArgs = var.talos_extra_kernel_args
-        }
         nodeLabels      = local.worker_nodepools_map[node.labels.nodepool].labels
         nodeAnnotations = local.worker_nodepools_map[node.labels.nodepool].annotations
-        certSANs        = local.certificate_san
         network = {
           hostname = node.name
           interfaces = concat(
@@ -432,17 +375,8 @@ locals {
               routes    = local.talos_extra_routes
             }]
           )
-          nameservers      = local.talos_nameservers
-          extraHostEntries = local.talos_extra_host_entries
         }
         kubelet = {
-          extraArgs = merge(
-            {
-              "cloud-provider"             = "external",
-              "rotate-server-certificates" = true
-            },
-            var.kubernetes_kubelet_extra_args
-          )
           extraConfig = merge(
             {
               shutdownGracePeriod             = "90s"
@@ -461,61 +395,20 @@ locals {
             },
             var.kubernetes_kubelet_extra_config
           )
-          extraMounts = local.talos_kubelet_extra_mounts
-          nodeIP = {
-            validSubnets = [local.network_node_ipv4_cidr]
-          }
         }
-        kernel = {
-          modules = var.talos_kernel_modules
-        }
-        sysctls = merge(
-          {
-            "net.core.somaxconn"                 = "65535"
-            "net.core.netdev_max_backlog"        = "4096"
-            "net.ipv6.conf.default.disable_ipv6" = "${var.talos_ipv6_enabled ? 0 : 1}"
-            "net.ipv6.conf.all.disable_ipv6"     = "${var.talos_ipv6_enabled ? 0 : 1}"
-          },
-          var.talos_sysctls_extra_args
-        )
-        registries           = var.talos_registries
-        systemDiskEncryption = local.talos_system_disk_encryption
         features = {
           hostDNS = local.talos_host_dns
         }
-        time = {
-          servers = var.talos_time_servers
-        }
-        logging = {
-          destinations = var.talos_logging_destinations
-        }
       }
-      cluster = {
-        network = {
-          dnsDomain      = var.cluster_domain
-          podSubnets     = [local.network_pod_ipv4_cidr]
-          serviceSubnets = [local.network_service_ipv4_cidr]
-          cni            = { name = "none" }
-        }
-        proxy = {
-          disabled = true
-        }
-        discovery = local.talos_discovery
-      }
-    }
+    })
   }
 
   # Autoscaler Config
   autoscaler_nodepool_talos_config_patch = {
-    for nodepool in local.cluster_autoscaler_nodepools : nodepool.name => {
+    for nodepool in local.cluster_autoscaler_nodepools : nodepool.name => merge( local.talos_init_config, {
       machine = {
-        install = {
-          image           = local.talos_installer_image_url
-          extraKernelArgs = var.talos_extra_kernel_args
-        }
         nodeLabels      = nodepool.labels
         nodeAnnotations = nodepool.annotations
-        certSANs        = local.certificate_san
         network = {
           interfaces = concat(
             local.talos_public_interface_enabled ? [{
@@ -532,17 +425,8 @@ locals {
               routes    = local.talos_extra_routes
             }]
           )
-          nameservers      = local.talos_nameservers
-          extraHostEntries = local.talos_extra_host_entries
         }
         kubelet = {
-          extraArgs = merge(
-            {
-              "cloud-provider"             = "external"
-              "rotate-server-certificates" = true
-            },
-            var.kubernetes_kubelet_extra_args
-          )
           extraConfig = merge(
             {
               shutdownGracePeriod             = "90s"
@@ -561,48 +445,9 @@ locals {
             },
             var.kubernetes_kubelet_extra_config
           )
-          extraMounts = local.talos_kubelet_extra_mounts
-          nodeIP = {
-            validSubnets = [local.network_node_ipv4_cidr]
-          }
-        }
-        kernel = {
-          modules = var.talos_kernel_modules
-        }
-        sysctls = merge(
-          {
-            "net.core.somaxconn"                 = "65535"
-            "net.core.netdev_max_backlog"        = "4096"
-            "net.ipv6.conf.default.disable_ipv6" = "${var.talos_ipv6_enabled ? 0 : 1}"
-            "net.ipv6.conf.all.disable_ipv6"     = "${var.talos_ipv6_enabled ? 0 : 1}"
-          },
-          var.talos_sysctls_extra_args
-        )
-        registries           = var.talos_registries
-        systemDiskEncryption = local.talos_system_disk_encryption
-        features = {
-          hostDNS = local.talos_host_dns
-        }
-        time = {
-          servers = var.talos_time_servers
-        }
-        logging = {
-          destinations = var.talos_logging_destinations
         }
       }
-      cluster = {
-        network = {
-          dnsDomain      = var.cluster_domain
-          podSubnets     = [local.network_pod_ipv4_cidr]
-          serviceSubnets = [local.network_service_ipv4_cidr]
-          cni            = { name = "none" }
-        }
-        proxy = {
-          disabled = true
-        }
-        discovery = local.talos_discovery
-      }
-    }
+    })
   }
 }
 
