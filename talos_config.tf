@@ -145,6 +145,44 @@ locals {
     }
   }
 
+  talos_init_config = {
+    machine = {
+      install = {
+        image           = local.talos_installer_image_url
+        extraKernelArgs = var.talos_extra_kernel_args
+      }
+      network = {
+        interfaces = concat(
+          local.talos_public_interface_enabled ? [{
+            interface = "eth0"
+            dhcp      = true
+            dhcpOptions = {
+              ipv4 = var.talos_public_ipv4_enabled
+              ipv6 = false
+            }
+          }] : [],
+          [{
+            interface = local.talos_public_interface_enabled ? "eth1" : "eth0"
+            dhcp      = true
+            routes    = local.talos_extra_routes
+          }]
+        )
+        nameservers = local.talos_nameservers
+      }
+      kernel = {
+        modules = var.talos_kernel_modules
+      }
+      registries           = var.talos_registries
+      systemDiskEncryption = local.talos_system_disk_encryption
+      time = {
+        servers = var.talos_time_servers
+      }
+      logging = {
+        destinations = var.talos_logging_destinations
+      }
+    }
+  }
+
   # Control Plane Config
   control_plane_talos_config_patch = {
     for node in hcloud_server.control_plane : node.name => {
