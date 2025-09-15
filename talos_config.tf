@@ -151,7 +151,7 @@ locals {
         image           = local.talos_installer_image_url
         extraKernelArgs = var.talos_extra_kernel_args
       }
-      certSANs = local.certificate_san
+      certSANs        = local.certificate_san
       network = {
         interfaces = concat(
           local.talos_public_interface_enabled ? [{
@@ -174,7 +174,7 @@ locals {
       kubelet = {
         extraArgs = merge(
           {
-            "cloud-provider"             = "external"
+            "cloud-provider"             = "external",
             "rotate-server-certificates" = true
           },
           var.kubernetes_kubelet_extra_args
@@ -184,12 +184,12 @@ locals {
             shutdownGracePeriod             = "90s"
             shutdownGracePeriodCriticalPods = "15s"
             systemReserved = {
-              cpu               = "250m"
+              cpu               = "100m"
               memory            = "300Mi"
               ephemeral-storage = "1Gi"
             }
             kubeReserved = {
-              cpu               = "250m"
+              cpu               = "100m"
               memory            = "350Mi"
               ephemeral-storage = "1Gi"
             }
@@ -206,9 +206,9 @@ locals {
       }
       sysctls = merge(
         {
-          "net.core.somaxconn"                 = "65535",
-          "net.core.netdev_max_backlog"        = "4096",
-          "net.ipv6.conf.default.disable_ipv6" = "${var.talos_ipv6_enabled ? 0 : 1}",
+          "net.core.somaxconn"                 = "65535"
+          "net.core.netdev_max_backlog"        = "4096"
+          "net.ipv6.conf.default.disable_ipv6" = "${var.talos_ipv6_enabled ? 0 : 1}"
           "net.ipv6.conf.all.disable_ipv6"     = "${var.talos_ipv6_enabled ? 0 : 1}"
         },
         var.talos_sysctls_extra_args
@@ -216,14 +216,6 @@ locals {
       registries           = var.talos_registries
       systemDiskEncryption = local.talos_system_disk_encryption
       features = {
-        kubernetesTalosAPIAccess = {
-          enabled = true,
-          allowedRoles = [
-            "os:reader",
-            "os:etcd:backup"
-          ],
-          allowedKubernetesNamespaces = ["kube-system"]
-        },
         hostDNS = local.talos_host_dns
       }
       time = {
@@ -240,46 +232,10 @@ locals {
         serviceSubnets = [local.network_service_ipv4_cidr]
         cni            = { name = "none" }
       }
-      coreDNS = {
-        disabled = !var.talos_coredns_enabled
-      }
       proxy = {
         disabled = true
       }
-      apiServer = {
-        admissionControl = var.kube_api_admission_control
-        certSANs         = local.certificate_san,
-        extraArgs = merge(
-          { "enable-aggregator-routing" = true },
-          local.kube_oidc_configuration,
-          var.kube_api_extra_args
-        )
-      }
-      controllerManager = {
-        extraArgs = {
-          "cloud-provider" = "external"
-          "bind-address"   = "0.0.0.0"
-        }
-      }
       discovery = local.talos_discovery
-      etcd = {
-        extraArgs = {
-          "listen-metrics-urls" = "http://0.0.0.0:2381"
-        }
-      }
-      scheduler = {
-        extraArgs = {
-          "bind-address" = "0.0.0.0"
-        }
-      }
-      adminKubeconfig = {
-        certLifetime = "87600h"
-      }
-      inlineManifests = local.talos_inline_manifests
-      externalCloudProvider = {
-        enabled   = true,
-        manifests = local.talos_manifests
-      }
     }
   }
 
