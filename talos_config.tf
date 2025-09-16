@@ -451,6 +451,38 @@ locals {
   }
 }
 
+data "talos_machine_configuration" "control_plane_init" {
+  talos_version      = var.talos_version
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = "https://localhost:6443"
+  kubernetes_version = var.kubernetes_version
+  machine_type       = "controlplane"
+  machine_secrets    = talos_machine_secrets.this.machine_secrets
+  docs               = false
+  examples           = false
+
+  config_patches = concat(
+    [yamlencode(local.talos_init_config)],
+    [for patch in var.control_plane_init_config_patches : yamlencode(patch)]
+  )
+}
+
+data "talos_machine_configuration" "worker_init" {
+  talos_version      = var.talos_version
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = "https://localhost:6443"
+  kubernetes_version = var.kubernetes_version
+  machine_type       = "worker"
+  machine_secrets    = talos_machine_secrets.this.machine_secrets
+  docs               = false
+  examples           = false
+
+  config_patches = concat(
+    [yamlencode(local.talos_init_config)],
+    [for patch in var.worker_init_config_patches : yamlencode(patch)]
+  )
+}
+
 data "talos_machine_configuration" "control_plane" {
   for_each = { for node in hcloud_server.control_plane : node.name => node }
 
